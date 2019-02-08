@@ -10,3 +10,5 @@ compile code from A# directory, runs any tests in tests directory
 (must have made your own tests directory and tests), opens
 vim with all code in reverse sort order and report in
 different tabs.
+
+Currently best used with ranger file manager.
