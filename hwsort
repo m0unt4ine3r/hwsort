@@ -1,0 +1,265 @@
+#!/bin/bash
+#
+# hwsort
+# A tool for automating grading
+# - Anthony Roebuck III
+#
+# ToC:
+# 	mkstudent
+#	getzip
+#	schemecheck
+#	compile
+#	runtests
+#	opencode
+
+
+
+# Vars
+
+hw="Set2"
+sec="sec_e"
+# change to where your files get downloaded to:
+ddir="$HOME/downloads"	
+# change to where you want the hws to be moved to:
+workdir="$HOME/work/sprg-2019/csci261-prog_con/$hw"
+# change to where test files are; they should be the only files in the directory:
+testdir="$workdir/tests"	
+scheme=(A2 L2A L2B L2C L2D L2E)	# directory with file to be compiled must be first
+#score=28
+
+# Debug
+#set -x
+
+# Code
+
+# Setting up final vars for program to run
+if [ -n "$2" ] && [ -n "$3" ]; then
+	echo "Setting vars..."
+
+	student="$3_$2"
+	report="$workdir/$sec/$student/report.txt"
+	error="$workdir/$sec/$student/error.txt"
+
+	echo "Student directory: $workdir/$sec/$student"
+	echo "Report: $report"
+	echo "Error log: $error"
+
+	# To make student dir and set appropriate vars; should always be run on student when changing
+	mkstudent()
+	{
+			echo "Making dir for $1 $2..."
+			mkdir "$workdir/$sec/$student" -p 2>/dev/null
+	}
+
+	# Find, move, and unzip zip
+	getzip()
+	{
+		echo "Checking for $ddir/$hw.zip..."
+
+		# Move file to work directory:
+		if [ ! -f "$ddir/$hw.zip" ]; then # input new filename if zip named incorrectly
+			echo "Couldn't find $ddir/$hw.zip"
+	#		$score=$(expr $score - 0.25)
+		
+			echo "Checking for nearest match..."
+			other=`find $ddir -maxdepth 1 -type f -regextype sed \
+				-iregex ".*set.*${hw:3}.*\.zip"`
+
+			if [ -n "$other" ]; then
+				echo "Found `basename "$other"`"
+				echo "Moving $other to $student/$hw.zip..."
+				mv "$other" "$workdir/$sec/$student/$hw.zip"
+
+			# For entering manually
+			else
+				while [ ! -f "$ddir/$hw.zip" ] || [ ! -f "$other/$hw.zip" ]; do
+					echo "Check for correct filename and enter here (just basename; \
+					don't forged \".zip\"):"
+
+					read other 
+
+					if [ -f "$ddir/$other" ]; then
+						echo "Moving $other to $workdir/$sec/$student/$hw.zip..."
+						mv "$ddir/$other" "$workdir/$sec/$student/$hw.zip"
+						break
+					fi
+
+					echo "$other not found"
+				done
+			fi
+
+			echo "-.25 \"`basename "$other"`\" should be named \"$hw.zip\"" >> "$report"
+			echo >> "$report"
+
+		# when everything is good
+		else	
+			echo "Moving $ddir/$hw.zip to $workdir/$sec/$student/$hw.zip"
+			mv "$ddir/$hw.zip" "$workdir/$sec/$student/$hw.zip"
+		fi
+
+		#echo "Moving to work dir..."
+		#cd $workdir/$sec
+
+		echo "Unzipping $workdir/$sec/$student/$hw.zip..."
+		unzip "$workdir/$sec/$student/$hw.zip" -d "$workdir/$sec/$student" 1> /dev/null
+	}
+
+	# Checks for proper directory structure and corrects
+	schemecheck()
+	{
+		echo "Checking for proper directory structure..."
+
+		# Try to move wrong dir to right one
+		if [ ! -d "$workdir/$sec/$student/$hw" ]; then
+			echo "No $hw; searching for near match..."
+			match=`find "$workdir/$sec/$student" -maxdepth 1 -type d -regextype sed -iregex ".*set.*${hw:3}.*"`
+
+			if [ -n "$match" ]; then
+				echo "Found " `basename "$match"`
+				echo "-.25 \"`basename "$match"`.zip\" should unzip to \"$hw\"" >> "$report"
+				echo >> "$report"
+		#		$score=$(expr $score - 0.25)
+				mv "$match" "$workdir/$sec/$student/$hw"
+			fi
+		fi
+
+	#	if [ ! -f "$workdir/$sec/$student/$hw" ]; then # input new filename if zip named incorrectly
+	#		echo "$workdir/$sec/$student/$hw doesn't exist (-.25)"
+	#		echo "-.25 zip should be named \"$hw\"" >> "$report"
+	#		echo >> "$report"
+	#	fi
+
+		# Checking for proper directory scheme
+		for subdir in ${scheme[*]}; do
+			if [ -d "$workdir/$sec/$student/$hw/$subdir" ]; then
+				echo "$subdir: check"
+			else
+				echo "$subdir: dne"
+				echo "Searching for near match for $subdir..."
+
+				# For A#
+				if [ $subdir == "A${subdir[2]}" ]; then
+					match=`find $workdir/$sec/$student -maxdepth 1 -type d -regextype sed \
+						-iregex ".*set.*${subdir[1]}"`
+
+					if [ -n $match ]; then
+						echo "-.25 \"`basename "$match"`\" should be \"$subdir\"" >> "$report"
+						echo >> "$report"
+
+						echo "Moving $match to $subdir..."
+						mv "$match" "$workdir/$sec/$student/$subdir"
+					fi
+
+				# For L#.
+				else
+					match=`find $workdir/$sec/$student/$hw -maxdepth 1 -type d -regextype sed \
+						-iregex ".*l.*${hw:3}.*${subdir[3]}"`
+
+					for file in $match; do
+						if [ -n $file ]; then
+							echo "-.25 \"`basename "$file"`\" should be \"$subdir\""\
+								>> "$report"
+							echo >> "$report"
+
+							echo "Moving $file to $subdir..."
+							mv "$match" "$workdir/$sec/$student/$hw/$subdir"
+						fi
+					done
+				fi
+	#			$score=$(expr $score - 0.25)
+			fi
+		done
+	}
+
+	#	echo "$score" >> "$report"
+
+	# Compiles
+	compile()
+	{
+		if [ -e "$workdir/$sec/$student/$hw/${scheme[0]}/main.cpp" ]; then
+			echo "Compiling ${scheme[0]}/main.cpp..."
+			echo > "$error"
+
+			g++ "$workdir/$sec/$student/$hw/${scheme[0]}/main.cpp" \
+				-o "$workdir/$sec/$student/a.out" &> "$error"
+
+		else
+			echo "Couldn't find ${scheme[0]}/main.cpp"
+		fi
+	}
+
+	# Runs tests
+	runtests()
+	{
+		echo "$workdir/$sec/$student/a.out"
+		if [  -e "$workdir/$sec/$student/a.out" ]; then
+			echo "Running tests..."
+
+			for file in "$testdir"/*; do
+				# Gets rid of unnecessary lines; will need changing:
+				cat "$file" | "$workdir/$sec/$student/a.out" | grep -iv "Enter" >> "$report"
+				echo >> "$report"
+			done
+		fi
+	}
+
+	# Open editor (vim)
+	opencode()
+	{
+		docs=`find "$workdir/$sec/$student" -name "*main.cpp" -not -path "*MACOSX*" | sort -r`
+		echo "Opening $docs $report..."
+		vim -p $docs $report
+
+		# For convinience; comment out if undisired:
+		echo "Copying $scheme/main.cpp to $student..."
+		cp "$workdir/$sec/$student/$hw/${scheme[0]}/main.cpp" "$workdir/$sec/$student/${scheme[0]}.cpp"
+	}
+
+	# Running the program
+	if [ -n "$1" ] && [ "$1" == "-m" ]; then
+		mkstudent
+
+	elif [ -n "$1" ] && [ "$1" == "-g" ]; then
+		getzip
+
+	elif [ -n "$1" ] && [ "$1" == "-s" ]; then
+		schemecheck
+
+	elif [ -n "$1" ] && [ "$1" == "-c" ]; then
+		compile
+
+	elif [ -n "$1" ] && [ "$1" == "-r" ]; then
+		runtests
+
+	elif [ -n "$1" ] && [ "$1" == "-o" ]; then
+		opencode
+
+	elif [ -n "$1" ] && [ "$1" == "-f" ]; then
+		echo "Report for $1 $2:" > "$report"
+		echo >> "$report"
+			
+		mkstudent
+		getzip
+		schemecheck
+		compile
+		runtests
+		opencode
+	fi
+
+# If not enough args supplied
+else
+	echo "Usage: hwsort [-m | -g | -s | -c | -r | -f] firstname lastname"
+	echo "Tries to sort files, unzip zip, compile code, run tests, and display all the code for you to easily view"
+	echo "Example: hwsort -f alan turing"
+	echo
+	echo "-m		[m]ake student directory, lastname_firstname"
+	echo "-g		[g]et zip file, move it to the student's directory, and unzip it"
+	echo "-s		check the file [s]cheme and correct any errors"
+	echo "-c		[c]ompile the code (binary will be at last_first/a.out)"
+	echo "-r		[r]un tests"
+	echo "-o		[o]pen code"
+	echo "-f		run [f]ull program (does all of the above)"
+fi
+
+# End debug
+#set +x
