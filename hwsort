@@ -4,6 +4,31 @@
 # A tool for automating grading
 # - Anthony Roebuck III
 #
+# Run as: hwsort studentFirstName studentLastName
+#
+# Tries to find proper file in downloads dir, moves to
+# dir named lastname_firstname, unzips, checks for proper
+# dir scheme and tries to fix if necessary, tries to
+# compile code from A# dir, runs any tests in tests dir
+# (must have made your own tests dir and tests), opens
+# vim with all code in reverse sort order and report in
+# different tabs.
+#
+# TODO:
+#	^refactor to functions
+#	^add support for options to only run sections
+#	-redo variables
+#	-fix calculations
+#	-function for adding missing directories
+#	-dealing with full project submission
+#	-more intelligence with file checking
+#		-check files for name?
+#		-check files for title?
+#	-documetation
+#	-smarter way to set student, report, and error vars outside initial run
+#	-integration with perl script?
+#	-verbosity
+#
 # ToC:
 # 	mkstudent
 #	getzip
@@ -109,10 +134,22 @@ if [ -n "$2" ] && [ -n "$3" ]; then
 	{
 		echo "Checking for proper directory structure..."
 
+		# Get rid of MACOSX
+		if [ -d "$workdir/$sec/$student/__MACOSX" ]; then
+			echo
+			echo "Getting rid of pesky mac files..."
+			echo
+			rm -r "$workdir/$sec/$student/__MACOSX"
+		fi
+
 		# Try to move wrong dir to right one
-		if [ ! -d "$workdir/$sec/$student/$hw" ]; then
+		if [ ! -d "$workdir/$sec/$student/$hw" ] || [ ! -d "$workdir/$sec/$student/${scheme[0]}" ]; then
 			echo "No $hw; searching for near match..."
 			match=`find "$workdir/$sec/$student" -maxdepth 1 -type d -regextype sed -iregex ".*set.*${hw:3}.*"`
+
+			echo
+			echo "Match: $match"
+			echo
 
 			if [ -n "$match" ]; then
 				echo "Found " `basename "$match"`
@@ -129,7 +166,7 @@ if [ -n "$2" ] && [ -n "$3" ]; then
 	#		echo >> "$report"
 	#	fi
 
-		# Checking for proper directory scheme
+		# Checking for proper directory scheme	#needs fixing
 		for subdir in ${scheme[*]}; do
 			if [ -d "$workdir/$sec/$student/$hw/$subdir" ]; then
 				echo "$subdir: check"
@@ -138,11 +175,14 @@ if [ -n "$2" ] && [ -n "$3" ]; then
 				echo "Searching for near match for $subdir..."
 
 				# For A#
-				if [ $subdir == "A${subdir[2]}" ]; then
-					match=`find $workdir/$sec/$student -maxdepth 1 -type d -regextype sed \
-						-iregex ".*set.*${subdir[1]}"`
+				if [ $subdir == "${scheme[0]}" ]; then
+					match=`find "$workdir/$sec/$student" -maxdepth 1 -type d -regextype sed \
+						-iregex ".*set.*${hw:3}"`
+					echo
+					echo "$match"
+					echo
 
-					if [ -n $match ]; then
+					if [ -n "$match" ]; then
 						echo "-.25 \"`basename "$match"`\" should be \"$subdir\"" >> "$report"
 						echo >> "$report"
 
@@ -161,8 +201,8 @@ if [ -n "$2" ] && [ -n "$3" ]; then
 								>> "$report"
 							echo >> "$report"
 
-							echo "Moving $file to $subdir..."
-							mv "$match" "$workdir/$sec/$student/$hw/$subdir"
+							#echo "Moving $file to $subdir..."
+							#mv "$match" "$workdir/$sec/$student/$hw/$subdir"
 						fi
 					done
 				fi
@@ -181,6 +221,13 @@ if [ -n "$2" ] && [ -n "$3" ]; then
 			echo > "$error"
 
 			g++ "$workdir/$sec/$student/$hw/${scheme[0]}/main.cpp" \
+				-o "$workdir/$sec/$student/a.out" &> "$error"
+
+		elif [ -e "$workdir/$sec/$student/${scheme[0]}/main.cpp" ]; then
+			echo "Compiling ${scheme[0]}/main.cpp..."
+			echo > "$error"
+
+			g++ "$workdir/$sec/$student/${scheme[0]}/main.cpp" \
 				-o "$workdir/$sec/$student/a.out" &> "$error"
 
 		else
@@ -228,7 +275,7 @@ if [ -n "$2" ] && [ -n "$3" ]; then
 	elif [ -n "$1" ] && [ "$1" == "-c" ]; then
 		compile
 
-	elif [ -n "$1" ] && [ "$1" == "-r" ]; then
+	elif [ -n "$1" ] && [ "$1" == "-t" ]; then
 		runtests
 
 	elif [ -n "$1" ] && [ "$1" == "-o" ]; then
@@ -256,7 +303,7 @@ else
 	echo "-g		[g]et zip file, move it to the student's directory, and unzip it"
 	echo "-s		check the file [s]cheme and correct any errors"
 	echo "-c		[c]ompile the code (binary will be at last_first/a.out)"
-	echo "-r		[r]un tests"
+	echo "-t		run [t]ests"
 	echo "-o		[o]pen code"
 	echo "-f		run [f]ull program (does all of the above)"
 fi

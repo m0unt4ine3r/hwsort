@@ -1,0 +1,3 @@
+2019/2/8 (version 0.0.2)
+Searches for labs and assignments in Set# AND last_first now
+-r for runtests is now -t
