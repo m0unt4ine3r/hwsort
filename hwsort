@@ -4,31 +4,6 @@
 # A tool for automating grading
 # - Anthony Roebuck III
 #
-# Run as: hwsort studentFirstName studentLastName
-#
-# Tries to find proper file in downloads dir, moves to
-# dir named lastname_firstname, unzips, checks for proper
-# dir scheme and tries to fix if necessary, tries to
-# compile code from A# dir, runs any tests in tests dir
-# (must have made your own tests dir and tests), opens
-# vim with all code in reverse sort order and report in
-# different tabs.
-#
-# TODO:
-#	^refactor to functions
-#	^add support for options to only run sections
-#	-redo variables
-#	-fix calculations
-#	-function for adding missing directories
-#	-dealing with full project submission
-#	-more intelligence with file checking
-#		-check files for name?
-#		-check files for title?
-#	-documetation
-#	-smarter way to set student, report, and error vars outside initial run
-#	-integration with perl script?
-#	-verbosity
-#
 # ToC:
 # 	mkstudent
 #	getzip
@@ -41,7 +16,9 @@
 
 # Vars
 
+# change to assignment:
 hw="Set2"
+# change to appropriate section:
 sec="sec_e"
 # change to where your files get downloaded to:
 ddir="$HOME/downloads"	
@@ -49,7 +26,7 @@ ddir="$HOME/downloads"
 workdir="$HOME/work/sprg-2019/csci261-prog_con/$hw"
 # change to where test files are; they should be the only files in the directory:
 testdir="$workdir/tests"	
-scheme=(A2 L2A L2B L2C L2D L2E)	# directory with file to be compiled must be first
+scheme=("A2" "L2A" "L2B" "L2C" "L2D" "L2E")	# directory with file to be compiled must be first
 #score=28
 
 # Debug
@@ -58,7 +35,7 @@ scheme=(A2 L2A L2B L2C L2D L2E)	# directory with file to be compiled must be fir
 # Code
 
 # Setting up final vars for program to run
-if [ -n "$2" ] && [ -n "$3" ]; then
+if [ -n "$2" ] && [ -n "$3" ]; then -2 perimeters and area not printed to 3 decimal places
 	echo "Setting vars..."
 
 	student="$3_$2"
@@ -72,7 +49,7 @@ if [ -n "$2" ] && [ -n "$3" ]; then
 	# To make student dir and set appropriate vars; should always be run on student when changing
 	mkstudent()
 	{
-			echo "Making dir for $1 $2..."
+			echo "Making dir for $2 $3..."
 			mkdir "$workdir/$sec/$student" -p 2>/dev/null
 	}
 
@@ -132,31 +109,43 @@ if [ -n "$2" ] && [ -n "$3" ]; then
 	# Checks for proper directory structure and corrects
 	schemecheck()
 	{
+		flag=0
+
 		echo "Checking for proper directory structure..."
 
 		# Get rid of MACOSX
 		if [ -d "$workdir/$sec/$student/__MACOSX" ]; then
-			echo
 			echo "Getting rid of pesky mac files..."
-			echo
 			rm -r "$workdir/$sec/$student/__MACOSX"
 		fi
 
-		# Try to move wrong dir to right one
-		if [ ! -d "$workdir/$sec/$student/$hw" ] || [ ! -d "$workdir/$sec/$student/${scheme[0]}" ]; then
+		# Check for Set#
+		if [ -d "$workdir/$sec/$student/$hw" -o -d "$workdir/$sec/$student/${scheme[0]}" ]; then
+			if [ -d "$workdir/$sec/$student/$hw" ]; then
+				flag=1
+			elif [ -d "$workdir/$sec/$student/${scheme[0]}" ]; then
+				flag=2
+			else
+				echo "An unexpected error has occured"
+				exit 1
+			fi
+
+		# If not correct
+		else
 			echo "No $hw; searching for near match..."
-			match=`find "$workdir/$sec/$student" -maxdepth 1 -type d -regextype sed -iregex ".*set.*${hw:3}.*"`
+			hwmatch=`find "$workdir/$sec/$student" -maxdepth 1 -type d -regextype sed\
+				-iregex "$workdir/$sec/$student/.*Set.*${hw:3}.*"`
 
-			echo
-			echo "Match: $match"
-			echo
-
-			if [ -n "$match" ]; then
-				echo "Found " `basename "$match"`
-				echo "-.25 \"`basename "$match"`.zip\" should unzip to \"$hw\"" >> "$report"
+			if [ -n "$hwmatch" ]; then
+				echo "Found `basename "$hwmatch"`"
+				echo "-.25 \"$hw.zip\" should unzip to \"$hw\" or \"${scheme[*]}\"" >> "$report"
 				echo >> "$report"
 		#		$score=$(expr $score - 0.25)
-				mv "$match" "$workdir/$sec/$student/$hw"
+				mv "$hwmatch" "$workdir/$sec/$student/$hw"
+				flag=1
+
+			else
+				flag=2
 			fi
 		fi
 
@@ -168,43 +157,54 @@ if [ -n "$2" ] && [ -n "$3" ]; then
 
 		# Checking for proper directory scheme	#needs fixing
 		for subdir in ${scheme[*]}; do
-			if [ -d "$workdir/$sec/$student/$hw/$subdir" ]; then
+			match=
+
+			if [ -d "$workdir/$sec/$student/$hw/$subdir"  -o -d "$workdir/$sec/$student/$subdir" ]; then
 				echo "$subdir: check"
 			else
 				echo "$subdir: dne"
 				echo "Searching for near match for $subdir..."
 
 				# For A#
-				if [ $subdir == "${scheme[0]}" ]; then
-					match=`find "$workdir/$sec/$student" -maxdepth 1 -type d -regextype sed \
-						-iregex ".*set.*${hw:3}"`
-					echo
-					echo "$match"
-					echo
+				if [ "$subdir" == "${scheme[0]}" ]; then
+
+					# If student/set#
+					if [ $flag -eq 1 ]; then
+						match=`find "$workdir/$sec/$student/$hw" -maxdepth 1 -type d -regextype sed \
+							-iregex "$workdir/$sec/$student/$hw/.*A.*${hw:3}.*"`
+
+					# If just student
+					elif [ $flag -eq 2 ]; then
+						match=`find "$workdir/$sec/$student" -maxdepth 1 -type d -regextype sed \
+							-iregex "$workdir/$sec/$student/.*A.*${hw:3}.*"`
+					fi
 
 					if [ -n "$match" ]; then
-						echo "-.25 \"`basename "$match"`\" should be \"$subdir\"" >> "$report"
-						echo >> "$report"
-
-						echo "Moving $match to $subdir..."
-						mv "$match" "$workdir/$sec/$student/$subdir"
+						echo "Moving $file to $subdir..."
+						mv "$match" "$workdir/$sec/$student/$hw/$subdir"
 					fi
 
 				# For L#.
 				else
-					match=`find $workdir/$sec/$student/$hw -maxdepth 1 -type d -regextype sed \
-						-iregex ".*l.*${hw:3}.*${subdir[3]}"`
+					# Same as above
+					if [ $flag -eq 1 ]; then
+						match=`find "$workdir/$sec/$student/$hw" -maxdepth 1 -type d -regextype sed \
+							-iregex "$workdir/$sec/$student/$hw/.*L.*${hw:3}.*${subdir:2}.*"`
 
-					for file in $match; do
-						if [ -n $file ]; then
-							echo "-.25 \"`basename "$file"`\" should be \"$subdir\""\
-								>> "$report"
-							echo >> "$report"
+					elif [ $flag -eq 2 ]; then
+						match=`find "$workdir/$sec/$student/" -maxdepth 1 -type d -regextype sed \
+							-iregex "$workdir/$sec/$student/.*L.*${hw:3}.*${subdir:2}.*"`
+					fi
+				fi
 
-							#echo "Moving $file to $subdir..."
-							#mv "$match" "$workdir/$sec/$student/$hw/$subdir"
-						fi
-					done
+				if [ -n "$match" ]; then
+					echo "-.25 \"`basename $(echo "$match" | sed -e 's/[[:space:]]*$//')`\" should be \"$subdir\""\
+						>> "$report"
+					echo >> "$report"
+
+				else
+					echo "-.25 missing \"$subdir\"" >> "$report"
+					echo >> "$report"
 				fi
 	#			$score=$(expr $score - 0.25)
 			fi
@@ -244,7 +244,7 @@ if [ -n "$2" ] && [ -n "$3" ]; then
 
 			for file in "$testdir"/*; do
 				# Gets rid of unnecessary lines; will need changing:
-				cat "$file" | "$workdir/$sec/$student/a.out" | grep -iv "Enter" >> "$report"
+				cat "$file" | "$workdir/$sec/$student/a.out" >> "$report"
 				echo >> "$report"
 			done
 		fi
@@ -253,13 +253,18 @@ if [ -n "$2" ] && [ -n "$3" ]; then
 	# Open editor (vim)
 	opencode()
 	{
-		docs=`find "$workdir/$sec/$student" -name "*main.cpp" -not -path "*MACOSX*" | sort -r`
+		docs=`find "$workdir/$sec/$student" -name "*main.cpp" | sort -r`
+
+		# Fixes whitespace issues
+
 		echo "Opening $docs $report..."
-		vim -p $docs $report
+		vim -p `echo "$docs" | sed -e 's/[[:space:]]/\\[[:space:]]/g'` $report
 
 		# For convinience; comment out if undisired:
-		echo "Copying $scheme/main.cpp to $student..."
-		cp "$workdir/$sec/$student/$hw/${scheme[0]}/main.cpp" "$workdir/$sec/$student/${scheme[0]}.cpp"
+		if [ -d "$workdir/$sec/$student/$hw/${scheme[0]}"  -o -d "$workdir/$sec/$student/${scheme[0]}" ]; then
+			echo "Copying $scheme/main.cpp to $student..."
+			cp "$workdir/$sec/$student/$hw/${scheme[0]}/main.cpp" "$workdir/$sec/$student/${scheme[0]}.cpp"
+		fi
 	}
 
 	# Running the program
@@ -282,7 +287,7 @@ if [ -n "$2" ] && [ -n "$3" ]; then
 		opencode
 
 	elif [ -n "$1" ] && [ "$1" == "-f" ]; then
-		echo "Report for $1 $2:" > "$report"
+		echo "Report for $2 $3:" > "$report"
 		echo >> "$report"
 			
 		mkstudent

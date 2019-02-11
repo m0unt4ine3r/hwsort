@@ -1,3 +1,12 @@
-2019/2/8 (version 0.0.2)
-Searches for labs and assignments in Set# AND last_first now
--r for runtests is now -t
+2019/2/8 (version 0.2.0)
+
+- Searches for labs and assignments in Set# AND last_first now
+- -r for runtests is now -t
+
+2019/2/11 (version 1.0.0)
+
+- Fixed bug in schemecheck logic that caused empty string on matches
+- Added code to rm "__MACOSX" directory
+- Fixed bug where vim would be given strings with spaces, interpreting them as
+seperate files
+- Made fuzzy searches a bit more fuzzy
